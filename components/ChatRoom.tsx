@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Zap, MessageSquareDashed, Send, User } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,8 @@ export function ChatRoom({ room }: ChatRoomProps) {
   const [vanishing, setVanishing] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastMessageCount = useRef(0);
+  const initialLoadDone = useRef(false);
   const MAX_CHARS = 300;
 
   const username = getStoredUsername() ?? "Anonymous";
@@ -48,6 +51,59 @@ export function ChatRoom({ room }: ChatRoomProps) {
       sendSystemMessage(`${username} joined`);
     }
   }, [hasJoined, username, sendSystemMessage]);
+
+  const playJoinSound = useCallback(() => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+      
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch (e) {
+      // Ignore if audio fails (e.g. before user interaction)
+    }
+  }, []);
+
+  // Watch for new messages to trigger toast/sound
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    if (!initialLoadDone.current) {
+      initialLoadDone.current = true;
+      lastMessageCount.current = messages.length;
+      return;
+    }
+
+    if (messages.length > lastMessageCount.current) {
+      const newMessages = messages.slice(lastMessageCount.current);
+      lastMessageCount.current = messages.length;
+
+      newMessages.forEach((msg) => {
+        if (msg.type === "system" && msg.text.endsWith(" joined")) {
+          const joinedName = msg.text.replace(" joined", "");
+          if (joinedName !== username) {
+            toast.success(`${joinedName} has joined the room`, {
+              icon: "👋",
+              duration: 3000,
+            });
+            playJoinSound();
+          }
+        }
+      });
+    }
+  }, [messages, username, playJoinSound]);
 
   // Auto-scroll on new message
   useEffect(() => {
