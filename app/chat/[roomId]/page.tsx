@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { getRoomById } from '@/lib/firebase/roomService';
 import type { Room } from '@/types';
 
-// Dynamically import ChatRoom for code splitting
+
 const ChatRoom = dynamic(
   () => import('@/components/ChatRoom').then((m) => ({ default: m.ChatRoom })),
   {
